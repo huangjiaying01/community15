@@ -41,30 +41,29 @@ def _rasterize(gdf, bounds, resolution=0.0005, value_col=None):
         if geom is None or geom.is_empty:
             continue
 
-        geom_type = geom.geom_type
+        gt = geom.geom_type
 
-        if geom_type == "Point":
-            px, py = geom.x, geom.y
-            c = int((px - minx) / resolution)
-            r = int((maxy - py) / resolution)
+        if gt == "Point":
+            c = int((geom.x - minx) / resolution)
+            r = int((maxy - geom.y) / resolution)
             if 0 <= r < height and 0 <= c < width:
                 raster[r, c] = val
 
-        elif geom_type == "MultiPoint":
+        elif gt == "MultiPoint":
             for pt in geom.geoms:
                 c = int((pt.x - minx) / resolution)
                 r = int((maxy - pt.y) / resolution)
                 if 0 <= r < height and 0 <= c < width:
                     raster[r, c] = val
 
-        elif geom_type == "LineString":
+        elif gt == "LineString":
             coords = list(geom.coords)
             for i in range(len(coords) - 1):
                 x1, y1 = coords[i]
                 x2, y2 = coords[i + 1]
                 seg_len = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
-                n_samples = max(2, int(seg_len / resolution) + 1)
-                for t in np.linspace(0, 1, n_samples):
+                n = max(2, int(seg_len / resolution) + 1)
+                for t in np.linspace(0, 1, n):
                     px = x1 + (x2 - x1) * t
                     py = y1 + (y2 - y1) * t
                     c = int((px - minx) / resolution)
@@ -72,15 +71,15 @@ def _rasterize(gdf, bounds, resolution=0.0005, value_col=None):
                     if 0 <= r < height and 0 <= c < width:
                         raster[r, c] = val
 
-        elif geom_type == "MultiLineString":
+        elif gt == "MultiLineString":
             for line in geom.geoms:
                 coords = list(line.coords)
                 for i in range(len(coords) - 1):
                     x1, y1 = coords[i]
                     x2, y2 = coords[i + 1]
                     seg_len = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
-                    n_samples = max(2, int(seg_len / resolution) + 1)
-                    for t in np.linspace(0, 1, n_samples):
+                    n = max(2, int(seg_len / resolution) + 1)
+                    for t in np.linspace(0, 1, n):
                         px = x1 + (x2 - x1) * t
                         py = y1 + (y2 - y1) * t
                         c = int((px - minx) / resolution)
@@ -88,22 +87,43 @@ def _rasterize(gdf, bounds, resolution=0.0005, value_col=None):
                         if 0 <= r < height and 0 <= c < width:
                             raster[r, c] = val
 
-        elif geom_type in ("Polygon", "MultiPolygon"):
+        elif gt in ("Polygon", "MultiPolygon"):
             minx_g, miny_g, maxx_g, maxy_g = geom.bounds
-            col_start = max(0, int((minx_g - minx) / resolution))
-            col_end = min(width, int((maxx_g - minx) / resolution) + 1)
-            row_start = max(0, int((maxy - maxy_g) / resolution))
-            row_end = min(height, int((maxy - miny_g) / resolution) + 1)
-
-            if col_start >= col_end or row_start >= row_end:
+            c0 = max(0, int((minx_g - minx) / resolution))
+            c1 = min(width, int((maxx_g - minx) / resolution) + 1)
+            r0 = max(0, int((maxy - maxy_g) / resolution))
+            r1 = min(height, int((maxy - miny_g) / resolution) + 1)
+            if c0 >= c1 or r0 >= r1:
                 continue
-
-            for r in range(row_start, row_end):
-                for c in range(col_start, col_end):
+            for r in range(r0, r1):
+                for c in range(c0, c1):
                     px = minx + (c + 0.5) * resolution
                     py = maxy - (r + 0.5) * resolution
                     if geom.contains(Point(px, py)):
                         raster[r, c] = val
+
+    return raster
+
+
+def _rasterize_kde(points_gdf, bounds, resolution=0.0005, sigma=3):
+    minx, miny, maxx, maxy = bounds
+    width = int((maxx - minx) / resolution)
+    height = int((maxy - miny) / resolution)
+    raster = np.zeros((height, width), dtype=np.float32)
+
+    for geom in points_gdf.geometry:
+        if geom is None or geom.is_empty:
+            continue
+        c = int((geom.x - minx) / resolution)
+        r = int((maxy - geom.y) / resolution)
+        if 0 <= r < height and 0 <= c < width:
+            raster[r, c] += 1
+
+    try:
+        from scipy.ndimage import gaussian_filter
+        raster = gaussian_filter(raster, sigma=sigma)
+    except ImportError:
+        pass
 
     return raster
 
@@ -163,16 +183,19 @@ def export_all_geotiff():
     resolution = 0.0005
 
     raster = _rasterize(road, bounds, resolution)
-    _write_tiff(out_dir / "01_路网.tif", raster, bounds)
+    _write_tiff(out_dir / "01_1_road.tif", raster, bounds)
 
     raster = _rasterize(communities, bounds, resolution)
-    _write_tiff(out_dir / "02_居住小区.tif", raster, bounds)
+    _write_tiff(out_dir / "01_2_communities.tif", raster, bounds)
 
-    raster = _rasterize(poi, bounds, resolution)
-    _write_tiff(out_dir / "03_各类设施.tif", raster, bounds)
+    raster = _rasterize_kde(poi, bounds, resolution, sigma=3)
+    _write_tiff(out_dir / "02_facility_kde.tif", raster, bounds)
 
     raster = _rasterize(iso, bounds, resolution)
-    _write_tiff(out_dir / "04_15分钟生活圈.tif", raster, bounds)
+    _write_tiff(out_dir / "03_1_isochrone.tif", raster, bounds)
+
+    raster = _rasterize(communities, bounds, resolution)
+    _write_tiff(out_dir / "03_2_communities.tif", raster, bounds)
 
     coverage = []
     for idx, row in iso.iterrows():
@@ -181,7 +204,7 @@ def export_all_geotiff():
     cov_gdf = gpd.GeoDataFrame(coverage, crs=iso.crs)
 
     raster = _rasterize(cov_gdf, bounds, resolution, value_col="count")
-    _write_tiff(out_dir / "05_设施覆盖率.tif", raster, bounds)
+    _write_tiff(out_dir / "04_coverage.tif", raster, bounds)
 
     eval_file = get_tab_dir() / "evaluation.xlsx"
     if eval_file.exists():
@@ -192,63 +215,45 @@ def export_all_geotiff():
         if access_cols:
             eval_gdf["total_access"] = eval_gdf[access_cols].sum(axis=1)
             raster = _rasterize(eval_gdf, bounds, resolution, value_col="total_access")
-            _write_tiff(out_dir / "06_2SFCA供需匹配.tif", raster, bounds)
+            _write_tiff(out_dir / "05_2sfca.tif", raster, bounds)
 
         if "composite_index" in eval_gdf.columns:
             raster = _rasterize(eval_gdf, bounds, resolution, value_col="composite_index")
-            _write_tiff(out_dir / "07_综合便利度.tif", raster, bounds)
+            _write_tiff(out_dir / "06_composite.tif", raster, bounds)
 
     blind_gdf = cov_gdf[cov_gdf["count"] == 0].copy()
     if len(blind_gdf) > 0:
         raster = _rasterize(blind_gdf, bounds, resolution)
-        _write_tiff(out_dir / "08_服务盲区.tif", raster, bounds)
+        _write_tiff(out_dir / "07_blind.tif", raster, bounds)
 
     optimized = cov_gdf.copy()
     if len(blind_gdf) > 0:
-        blind_gdf2 = blind_gdf.copy()
-        blind_gdf2["count"] = 1
-        optimized = pd.concat([cov_gdf[cov_gdf["count"] > 0], blind_gdf2])
+        b2 = blind_gdf.copy()
+        b2["count"] = 1
+        optimized = pd.concat([cov_gdf[cov_gdf["count"] > 0], b2])
 
     raster = _rasterize(cov_gdf, bounds, resolution, value_col="count")
-    _write_tiff(out_dir / "09_1_优化前覆盖率.tif", raster, bounds)
+    _write_tiff(out_dir / "08_1_before.tif", raster, bounds)
 
     raster = _rasterize(optimized, bounds, resolution, value_col="count")
-    _write_tiff(out_dir / "09_2_优化后覆盖率.tif", raster, bounds)
+    _write_tiff(out_dir / "08_2_after.tif", raster, bounds)
 
     if len(blind_gdf) > 0:
         raster = _rasterize(blind_gdf, bounds, resolution)
-        _write_tiff(out_dir / "10_设施增补建议.tif", raster, bounds)
+        _write_tiff(out_dir / "09_suggestion.tif", raster, bounds)
 
     if building is not None:
         raster = _rasterize(building, bounds, resolution)
-        _write_tiff(out_dir / "11_建筑轮廓.tif", raster, bounds)
+        _write_tiff(out_dir / "00_building.tif", raster, bounds)
 
-    raster = np.zeros((int((bounds[3] - bounds[1]) / resolution),
-                       int((bounds[2] - bounds[0]) / resolution)), dtype=np.float32)
-
-    for geom in poi.geometry:
-        if geom is None or geom.is_empty:
-            continue
-        px = geom.x
-        py = geom.y
-        c = int((px - bounds[0]) / resolution)
-        r = int((bounds[3] - py) / resolution)
-        if 0 <= r < raster.shape[0] and 0 <= c < raster.shape[1]:
-            raster[r, c] += 1
-
-    try:
-        from scipy.ndimage import gaussian_filter
-        raster = gaussian_filter(raster, sigma=2)
-    except ImportError:
-        pass
-
-    _write_tiff(out_dir / "14_设施热力图.tif", raster, bounds)
+    raster = _rasterize_kde(poi, bounds, resolution, sigma=2)
+    _write_tiff(out_dir / "14_heatmap.tif", raster, bounds)
 
     if study_area is not None:
-        shp_path = out_dir / "00_研究区边界.shp"
+        shp_path = out_dir / "00_study_area.shp"
         if shp_path.exists():
             for ext in [".shp", ".shx", ".dbf", ".prj", ".cpg"]:
-                f = out_dir / f"00_研究区边界{ext}"
+                f = out_dir / f"00_study_area{ext}"
                 if f.exists():
                     try:
                         f.unlink()

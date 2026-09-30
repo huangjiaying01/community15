@@ -114,24 +114,16 @@ def export_all_geotiff():
     resolution = 0.0005
 
     raster = _rasterize(road, bounds, resolution)
-    _write_tiff(out_dir / "01_1_路网.tif", raster, bounds)
+    _write_tiff(out_dir / "01_路网.tif", raster, bounds)
 
     raster = _rasterize(communities, bounds, resolution)
-    _write_tiff(out_dir / "01_2_居住小区.tif", raster, bounds)
+    _write_tiff(out_dir / "02_居住小区.tif", raster, bounds)
 
-    for ftype in ["education", "medical", "commercial", "transport",
-                  "elderly", "park", "sports", "culture"]:
-        sub = poi[poi["type"] == ftype]
-        if len(sub) == 0:
-            continue
-        raster = _rasterize(sub, bounds, resolution)
-        _write_tiff(out_dir / f"02_{ftype}.tif", raster, bounds)
+    raster = _rasterize(poi, bounds, resolution)
+    _write_tiff(out_dir / "03_各类设施.tif", raster, bounds)
 
     raster = _rasterize(iso, bounds, resolution)
-    _write_tiff(out_dir / "03_1_15分钟生活圈.tif", raster, bounds)
-
-    raster = _rasterize(communities, bounds, resolution)
-    _write_tiff(out_dir / "03_2_居住小区.tif", raster, bounds)
+    _write_tiff(out_dir / "04_15分钟生活圈.tif", raster, bounds)
 
     coverage = []
     for idx, row in iso.iterrows():
@@ -140,7 +132,7 @@ def export_all_geotiff():
     cov_gdf = gpd.GeoDataFrame(coverage, crs=iso.crs)
 
     raster = _rasterize(cov_gdf, bounds, resolution, value_col="count")
-    _write_tiff(out_dir / "04_设施覆盖率.tif", raster, bounds)
+    _write_tiff(out_dir / "05_设施覆盖率.tif", raster, bounds)
 
     eval_file = get_tab_dir() / "evaluation.xlsx"
     if eval_file.exists():
@@ -151,16 +143,16 @@ def export_all_geotiff():
         if access_cols:
             eval_gdf["total_access"] = eval_gdf[access_cols].sum(axis=1)
             raster = _rasterize(eval_gdf, bounds, resolution, value_col="total_access")
-            _write_tiff(out_dir / "05_2SFCA供需匹配.tif", raster, bounds)
+            _write_tiff(out_dir / "06_2SFCA供需匹配.tif", raster, bounds)
 
         if "composite_index" in eval_gdf.columns:
             raster = _rasterize(eval_gdf, bounds, resolution, value_col="composite_index")
-            _write_tiff(out_dir / "06_综合便利度.tif", raster, bounds)
+            _write_tiff(out_dir / "07_综合便利度.tif", raster, bounds)
 
     blind_gdf = cov_gdf[cov_gdf["count"] == 0].copy()
     if len(blind_gdf) > 0:
         raster = _rasterize(blind_gdf, bounds, resolution)
-        _write_tiff(out_dir / "07_服务盲区.tif", raster, bounds)
+        _write_tiff(out_dir / "08_服务盲区.tif", raster, bounds)
 
     optimized = cov_gdf.copy()
     if len(blind_gdf) > 0:
@@ -169,21 +161,18 @@ def export_all_geotiff():
         optimized = pd.concat([cov_gdf[cov_gdf["count"] > 0], blind_gdf2])
 
     raster = _rasterize(cov_gdf, bounds, resolution, value_col="count")
-    _write_tiff(out_dir / "08_1_优化前覆盖率.tif", raster, bounds)
+    _write_tiff(out_dir / "09_1_优化前覆盖率.tif", raster, bounds)
 
     raster = _rasterize(optimized, bounds, resolution, value_col="count")
-    _write_tiff(out_dir / "08_2_优化后覆盖率.tif", raster, bounds)
+    _write_tiff(out_dir / "09_2_优化后覆盖率.tif", raster, bounds)
 
     if len(blind_gdf) > 0:
         raster = _rasterize(blind_gdf, bounds, resolution)
-        _write_tiff(out_dir / "09_设施增补建议.tif", raster, bounds)
+        _write_tiff(out_dir / "10_设施增补建议.tif", raster, bounds)
 
     if building is not None:
         raster = _rasterize(building, bounds, resolution)
-        _write_tiff(out_dir / "10_建筑轮廓.tif", raster, bounds)
-
-    raster = _rasterize(poi, bounds, resolution)
-    _write_tiff(out_dir / "11_全部POI.tif", raster, bounds)
+        _write_tiff(out_dir / "11_建筑轮廓.tif", raster, bounds)
 
     raster = np.zeros((int((bounds[3] - bounds[1]) / resolution),
                        int((bounds[2] - bounds[0]) / resolution)), dtype=np.float32)

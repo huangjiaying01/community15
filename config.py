@@ -1,11 +1,36 @@
 from pathlib import Path
 
-BASE_DIR = Path(__file__).parent
-DATA_RAW = BASE_DIR / "data" / "raw"
-DATA_PROCESSED = BASE_DIR / "data" / "processed"
-OUTPUT_ROOT = BASE_DIR / "outputs"
+import geopandas as gpd
 
-for p in [DATA_RAW, DATA_PROCESSED, OUTPUT_ROOT]:
+try:
+    gpd.options.io_engine = "pyogrio"
+except Exception:
+    pass
+
+BASE_DIR = Path(__file__).parent
+DATA_DIR = BASE_DIR / "data"
+DATA_RAW = DATA_DIR / "raw"
+DATA_PROCESSED = DATA_DIR / "processed"
+DATA_BOUNDARY = DATA_DIR / "boundary"
+DATA_BUILTIN = DATA_DIR / "builtin"
+OUTPUT_ROOT = BASE_DIR / "outputs"
+OUTPUT_FIG = OUTPUT_ROOT / "figures"
+OUTPUT_TAB = OUTPUT_ROOT / "tables"
+OUTPUT_MAP = OUTPUT_ROOT / "maps"
+
+ALL_DIRS = [
+    DATA_DIR,
+    DATA_RAW,
+    DATA_PROCESSED,
+    DATA_BOUNDARY,
+    DATA_BUILTIN,
+    OUTPUT_ROOT,
+    OUTPUT_FIG,
+    OUTPUT_TAB,
+    OUTPUT_MAP,
+]
+
+for p in ALL_DIRS:
     p.mkdir(parents=True, exist_ok=True)
 
 CRS_WGS84 = "EPSG:4326"

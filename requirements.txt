@@ -1,12 +1,13 @@
 streamlit
 pandas
+numpy
 geopandas
 shapely
 matplotlib
 contextily
 openpyxl
 xlsxwriter
-rasterio
 pyproj
-fiona
+pyogrio
+tifffile
 modelscope

@@ -1,19 +1,47 @@
+import matplotlib
+matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 import geopandas as gpd
 import pandas as pd
 import numpy as np
+from pathlib import Path
 from matplotlib.patches import Patch, Polygon
-from config import DATA_PROCESSED
+from config import DATA_PROCESSED, BASE_DIR
 from modules.path_config import get_fig_dir, get_tab_dir
 
-plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei"]
+font_dir = BASE_DIR / "assets" / "fonts"
+
+font_candidates = [
+    font_dir / "msyh.ttc",
+    font_dir / "simhei.ttf",
+    font_dir / "simsun.ttc",
+    font_dir / "NotoSansCJK-Regular.ttc",
+]
+
+loaded_font = None
+for fp in font_candidates:
+    if fp.exists():
+        try:
+            fm.fontManager.addfont(str(fp))
+            loaded_font = fm.FontProperties(fname=str(fp)).get_name()
+            break
+        except Exception:
+            continue
+
+if loaded_font:
+    plt.rcParams["font.sans-serif"] = [loaded_font]
+else:
+    plt.rcParams["font.sans-serif"] = ["DejaVu Sans"]
+
 plt.rcParams["axes.unicode_minus"] = False
 
 STUDY_AREA = DATA_PROCESSED / "study_area.shp"
 
 
 def _save(fig, name):
-    fig.savefig(get_fig_dir() / name, dpi=300, bbox_inches="tight")
+    fig.savefig(get_fig_dir() / name, dpi=200, bbox_inches="tight")
     plt.close(fig)
 
 

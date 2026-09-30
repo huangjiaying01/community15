@@ -40,21 +40,70 @@ def _rasterize(gdf, bounds, resolution=0.0005, value_col=None):
     for geom, val in items:
         if geom is None or geom.is_empty:
             continue
-        minx_g, miny_g, maxx_g, maxy_g = geom.bounds
-        col_start = max(0, int((minx_g - minx) / resolution))
-        col_end = min(width, int((maxx_g - minx) / resolution) + 1)
-        row_start = max(0, int((maxy - maxy_g) / resolution))
-        row_end = min(height, int((maxy - miny_g) / resolution) + 1)
 
-        if col_start >= col_end or row_start >= row_end:
-            continue
+        geom_type = geom.geom_type
 
-        for r in range(row_start, row_end):
-            for c in range(col_start, col_end):
-                px = minx + (c + 0.5) * resolution
-                py = maxy - (r + 0.5) * resolution
-                if geom.contains(Point(px, py)):
+        if geom_type == "Point":
+            px, py = geom.x, geom.y
+            c = int((px - minx) / resolution)
+            r = int((maxy - py) / resolution)
+            if 0 <= r < height and 0 <= c < width:
+                raster[r, c] = val
+
+        elif geom_type == "MultiPoint":
+            for pt in geom.geoms:
+                c = int((pt.x - minx) / resolution)
+                r = int((maxy - pt.y) / resolution)
+                if 0 <= r < height and 0 <= c < width:
                     raster[r, c] = val
+
+        elif geom_type == "LineString":
+            coords = list(geom.coords)
+            for i in range(len(coords) - 1):
+                x1, y1 = coords[i]
+                x2, y2 = coords[i + 1]
+                seg_len = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
+                n_samples = max(2, int(seg_len / resolution) + 1)
+                for t in np.linspace(0, 1, n_samples):
+                    px = x1 + (x2 - x1) * t
+                    py = y1 + (y2 - y1) * t
+                    c = int((px - minx) / resolution)
+                    r = int((maxy - py) / resolution)
+                    if 0 <= r < height and 0 <= c < width:
+                        raster[r, c] = val
+
+        elif geom_type == "MultiLineString":
+            for line in geom.geoms:
+                coords = list(line.coords)
+                for i in range(len(coords) - 1):
+                    x1, y1 = coords[i]
+                    x2, y2 = coords[i + 1]
+                    seg_len = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
+                    n_samples = max(2, int(seg_len / resolution) + 1)
+                    for t in np.linspace(0, 1, n_samples):
+                        px = x1 + (x2 - x1) * t
+                        py = y1 + (y2 - y1) * t
+                        c = int((px - minx) / resolution)
+                        r = int((maxy - py) / resolution)
+                        if 0 <= r < height and 0 <= c < width:
+                            raster[r, c] = val
+
+        elif geom_type in ("Polygon", "MultiPolygon"):
+            minx_g, miny_g, maxx_g, maxy_g = geom.bounds
+            col_start = max(0, int((minx_g - minx) / resolution))
+            col_end = min(width, int((maxx_g - minx) / resolution) + 1)
+            row_start = max(0, int((maxy - maxy_g) / resolution))
+            row_end = min(height, int((maxy - miny_g) / resolution) + 1)
+
+            if col_start >= col_end or row_start >= row_end:
+                continue
+
+            for r in range(row_start, row_end):
+                for c in range(col_start, col_end):
+                    px = minx + (c + 0.5) * resolution
+                    py = maxy - (r + 0.5) * resolution
+                    if geom.contains(Point(px, py)):
+                        raster[r, c] = val
 
     return raster
 

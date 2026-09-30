@@ -4,6 +4,7 @@ import geopandas as gpd
 import pandas as pd
 import zipfile
 import io
+import os
 
 st.set_page_config(
     page_title="15分钟宜居生活圈智能分析平台",
@@ -18,6 +19,8 @@ if css_file.exists():
 
 DATA_PROCESSED = Path("data/processed")
 STUDY_AREA_FILE = DATA_PROCESSED / "study_area.shp"
+
+IS_CLOUD = os.path.exists("/mount/src")
 
 from modules.path_config import (
     init_paths, get_output_dir, set_output_dir,
@@ -150,12 +153,20 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
+    if IS_CLOUD:
+        menu_items = ["🏠 首页总览", "🌏 研究区选择", "📥 数据准备与清洗",
+                      "🗺️ 生活圈划定", "📊 评价模型计算",
+                      "📈 一键出图", "📊 分析结果",
+                      "⚙️ 优化建议与导出"]
+    else:
+        menu_items = ["🏠 首页总览", "🌏 研究区选择", "📥 数据准备与清洗",
+                      "🗺️ 生活圈划定", "📊 评价模型计算",
+                      "📈 一键出图", "📊 分析结果",
+                      "📁 输出路径设置", "⚙️ 优化建议与导出"]
+
     menu = st.radio(
         "navigation",
-        ["🏠 首页总览", "🌏 研究区选择", "📥 数据准备与清洗",
-         "🗺️ 生活圈划定", "📊 评价模型计算",
-         "📈 一键出图", "📊 分析结果",
-         "📁 输出路径设置", "⚙️ 优化建议与导出"],
+        menu_items,
         label_visibility="collapsed"
     )
 

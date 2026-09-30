@@ -9,7 +9,9 @@ openpyxl
 xlsxwriter
 pyproj
 pyogrio
+pyarrow
 tifffile
+rasterio
 modelscope
 networkx
 scipy

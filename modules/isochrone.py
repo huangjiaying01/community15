@@ -1,5 +1,6 @@
 import geopandas as gpd
 import networkx as nx
+import gc
 from shapely.geometry import Point, LineString, MultiLineString, Polygon, MultiPolygon
 from shapely.ops import unary_union
 from config import DATA_PROCESSED, CRS_WGS84, WALK_SPEED, TIME_THRESHOLD
@@ -64,14 +65,21 @@ def _build_graph(road, speed):
 
 
 def run_isochrone(speed=WALK_SPEED, minutes=TIME_THRESHOLD):
-    communities = gpd.read_file(DATA_PROCESSED / "communities.gpkg", layer="communities")
-    road = gpd.read_file(DATA_PROCESSED / "road_clean.gpkg", layer="road")
+    communities = gpd.read_file(DATA_PROCESSED / "communities.gpkg",
+                                layer="communities", engine="pyogrio")
+    road = gpd.read_file(DATA_PROCESSED / "road_clean.gpkg",
+                         layer="road", engine="pyogrio")
 
     poi_path = DATA_PROCESSED / "poi_clean.gpkg"
-    poi = gpd.read_file(poi_path, layer="poi") if poi_path.exists() else None
+    poi = None
+    if poi_path.exists():
+        poi = gpd.read_file(poi_path, layer="poi", engine="pyogrio")
 
     print(f"Building graph from {len(road)} road segments...")
     G = _build_graph(road, speed)
+
+    del road
+    gc.collect()
 
     if len(G.nodes) == 0:
         raise ValueError("Graph is empty. No valid road lines found.")
@@ -110,6 +118,9 @@ def run_isochrone(speed=WALK_SPEED, minutes=TIME_THRESHOLD):
             "geometry": hull
         })
 
+    del communities, G
+    gc.collect()
+
     if not results:
         raise ValueError("no valid isochrones generated")
 
@@ -125,6 +136,9 @@ def run_isochrone(speed=WALK_SPEED, minutes=TIME_THRESHOLD):
     iso = gpd.GeoDataFrame(valid_results, geometry="geometry", crs=CRS_WGS84)
     iso = iso[iso.geometry.notnull()].copy()
 
+    del valid_results, results
+    gc.collect()
+
     iso_proj = iso.to_crs(4547)
     iso["area_m2"] = iso_proj.geometry.area.round(1)
     iso["perimeter_m"] = iso_proj.geometry.length.round(1)
@@ -136,6 +150,9 @@ def run_isochrone(speed=WALK_SPEED, minutes=TIME_THRESHOLD):
             cnt = len(poi_proj[poi_proj.within(row.geometry)])
             poi_counts.append(cnt)
         iso["poi_count"] = poi_counts
+
+        del poi, poi_proj
+        gc.collect()
     else:
         iso["poi_count"] = 0
 
@@ -143,6 +160,8 @@ def run_isochrone(speed=WALK_SPEED, minutes=TIME_THRESHOLD):
     iso["centroid_x"] = centroids_wgs.x.round(6)
     iso["centroid_y"] = centroids_wgs.y.round(6)
 
-    iso.to_file(DATA_PROCESSED / "isochrone.gpkg", driver="GPKG", layer="isochrone")
+    iso.to_file(DATA_PROCESSED / "isochrone.gpkg", driver="GPKG",
+                layer="isochrone", engine="pyogrio")
     print(f"Saved {len(iso)} isochrones")
+
     return iso

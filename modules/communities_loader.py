@@ -1,6 +1,7 @@
 import geopandas as gpd
 from pathlib import Path
 import pandas as pd
+import gc
 from shapely.geometry import Point
 from config import BASE_DIR, DATA_PROCESSED
 
@@ -12,35 +13,64 @@ def generate_communities_from_buildings():
     if not STUDY_AREA_FILE.exists():
         raise FileNotFoundError("study area not set")
 
-    study_area = gpd.read_file(STUDY_AREA_FILE).to_crs("EPSG:4326")
+    study_area = gpd.read_file(STUDY_AREA_FILE, engine="pyogrio").to_crs("EPSG:4326")
     cities = study_area["市"].dropna().unique().tolist()
     bbox = tuple(study_area.total_bounds)
 
-    all_buildings = []
+    all_residential = []
+
     for city in cities:
         city_file = BUILDING_DIR / f"{city}.gpkg"
         city_dir = BUILDING_DIR / city
 
+        files = []
         if city_file.exists():
-            b = gpd.read_file(city_file, layer="building", bbox=bbox)
-            all_buildings.append(b)
+            files = [city_file]
         elif city_dir.exists():
-            for f in city_dir.rglob("*.gpkg"):
-                b = gpd.read_file(f, layer="building", bbox=bbox)
-                all_buildings.append(b)
+            files = list(city_dir.rglob("*.gpkg"))
 
-    if not all_buildings:
-        raise FileNotFoundError("no building data")
+        for f in files:
+            print(f"reading residential from {f.name}...")
+            try:
+                gdf = gpd.read_file(
+                    f,
+                    layer="building",
+                    bbox=bbox,
+                    engine="pyogrio",
+                    use_arrow=True,
+                )
 
-    buildings = gpd.GeoDataFrame(
-        pd.concat(all_buildings, ignore_index=True),
-        crs="EPSG:4326"
+                if len(gdf) == 0:
+                    del gdf
+                    gc.collect()
+                    continue
+
+                residential = gdf[gdf["class_pred"] == "Residential"].copy()
+
+                if len(residential) > 0:
+                    residential = residential.to_crs(study_area.crs)
+                    residential = gpd.clip(residential, study_area)
+                    residential = residential[residential.geometry.notnull()].copy()
+
+                    if len(residential) > 0:
+                        all_residential.append(residential)
+
+                del gdf, residential
+                gc.collect()
+
+            except Exception as e:
+                print(f"error loading {f.name}: {e}")
+
+    if not all_residential:
+        raise FileNotFoundError("no residential buildings")
+
+    residential = gpd.GeoDataFrame(
+        pd.concat(all_residential, ignore_index=True),
+        crs=study_area.crs
     )
 
-    residential = buildings[buildings["class_pred"] == "Residential"].copy()
-    residential = residential.to_crs(study_area.crs)
-    residential = gpd.clip(residential, study_area)
-    residential = residential[residential.geometry.notnull()].copy()
+    del all_residential
+    gc.collect()
 
     residential_proj = residential.to_crs("EPSG:4547")
     centroids = residential_proj.geometry.centroid
@@ -55,6 +85,9 @@ def generate_communities_from_buildings():
         "cx": centroids.x.values,
         "cy": centroids.y.values,
     })
+
+    del residential, residential_proj, centroids, grid_x, grid_y, grid_id
+    gc.collect()
 
     grouped = df.groupby("grid_id").agg(
         building_count=("cx", "count"),

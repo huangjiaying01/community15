@@ -1,0 +1,15 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+data/builtin/
+data/processed/
+data/raw/
+outputs/
+figures/
+tables/
+data_builtin.zip
+*.zip
+preprocess_nightlight.py
+preprocess_population.py
+upload_to_modelscope.py

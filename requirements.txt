@@ -1,0 +1,12 @@
+streamlit
+pandas
+geopandas
+shapely
+matplotlib
+contextily
+openpyxl
+xlsxwriter
+rasterio
+pyproj
+fiona
+modelscope

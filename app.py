@@ -33,6 +33,27 @@ with st.spinner("正在检查数据..."):
     from modules.data_downloader import ensure_data
     ensure_data()
 
+
+def clear_outputs():
+    try:
+        for d in [get_fig_dir(), get_tab_dir()]:
+            for f in Path(d).glob("*"):
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
+        geotiff_dir = get_output_dir() / "geotiff"
+        if geotiff_dir.exists():
+            for f in geotiff_dir.glob("*"):
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    st.session_state.pop("zip_buffer", None)
+
+
 if "app_initialized" not in st.session_state:
     st.session_state["app_initialized"] = True
 
@@ -44,23 +65,7 @@ if "app_initialized" not in st.session_state:
             except Exception:
                 pass
 
-    try:
-        for d in [get_fig_dir(), get_tab_dir()]:
-            for f in Path(d).glob("*"):
-                try:
-                    f.unlink()
-                except Exception:
-                    pass
-
-        geotiff_dir = get_output_dir() / "geotiff"
-        if geotiff_dir.exists():
-            for f in geotiff_dir.glob("*"):
-                try:
-                    f.unlink()
-                except Exception:
-                    pass
-    except Exception:
-        pass
+    clear_outputs()
 
 
 def card(content):
@@ -121,27 +126,47 @@ def clear_study_area():
             except Exception:
                 pass
 
-    try:
-        for d in [get_fig_dir(), get_tab_dir()]:
-            for f in Path(d).glob("*"):
-                try:
-                    f.unlink()
-                except Exception:
-                    pass
-
-        geotiff_dir = get_output_dir() / "geotiff"
-        if geotiff_dir.exists():
-            for f in geotiff_dir.glob("*"):
-                try:
-                    f.unlink()
-                except Exception:
-                    pass
-    except Exception:
-        pass
+    clear_outputs()
 
     st.session_state["run_success"] = False
     st.session_state["run_error"] = None
-    st.session_state.pop("zip_buffer", None)
+
+
+def download_section(key_prefix):
+    st.markdown("---")
+    st.markdown("### 📦 下载结果")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        if st.button("📦 打包所有结果", use_container_width=True,
+                     key=f"{key_prefix}_zip_btn"):
+            try:
+                zip_buffer = make_results_zip()
+                st.session_state["zip_buffer"] = zip_buffer.getvalue()
+                st.success("✅ 打包完成")
+            except Exception as e:
+                st.error(f"打包出错：{e}")
+
+    with col2:
+        if "zip_buffer" in st.session_state:
+            st.download_button(
+                label="⬇️ 下载全部结果",
+                data=st.session_state["zip_buffer"],
+                file_name="community15_results.zip",
+                mime="application/zip",
+                use_container_width=True,
+                key=f"{key_prefix}_zip_dl",
+            )
+        else:
+            st.info("请先点左侧「打包」")
+
+    with col3:
+        if st.button("🗑️ 清理服务器结果", use_container_width=True,
+                     key=f"{key_prefix}_clear_btn"):
+            clear_outputs()
+            st.success("✅ 已清理服务器结果")
+            st.rerun()
 
 
 with st.sidebar:
@@ -265,12 +290,7 @@ if menu == "🏠 首页总览":
                 from modules.analysis import generate_analysis_tables
                 from modules.export_geotiff import export_all_geotiff
 
-                for d in [get_fig_dir(), get_tab_dir()]:
-                    for f in Path(d).glob("*"):
-                        try:
-                            f.unlink()
-                        except Exception:
-                            pass
+                clear_outputs()
 
                 status.info("步骤 1/6：数据准备与清洗...")
                 progress.progress(10)
@@ -310,31 +330,7 @@ if menu == "🏠 首页总览":
                 status.error(f"运行出错：{e}")
                 st.session_state["run_error"] = str(e)
 
-    st.markdown("---")
-    st.markdown("### 📦 下载结果")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📦 打包所有结果（ZIP）", use_container_width=True, key="home_zip_btn"):
-            try:
-                zip_buffer = make_results_zip()
-                st.session_state["zip_buffer"] = zip_buffer.getvalue()
-                st.success("✅ 打包完成，点击右侧下载")
-            except Exception as e:
-                st.error(f"打包出错：{e}")
-
-    with col2:
-        if "zip_buffer" in st.session_state:
-            st.download_button(
-                label="⬇️ 下载全部结果（ZIP）",
-                data=st.session_state["zip_buffer"],
-                file_name="community15_results.zip",
-                mime="application/zip",
-                use_container_width=True,
-                key="home_zip_dl",
-            )
-        else:
-            st.info("请先点左侧「打包」")
+    download_section("home")
 
 
 elif menu == "🌏 研究区选择":
@@ -588,31 +584,7 @@ elif menu == "📈 一键出图":
     else:
         st.info("暂无图件")
 
-    st.markdown("---")
-    st.markdown("### 📦 下载结果")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📦 打包所有结果（ZIP）", use_container_width=True, key="fig_zip_btn"):
-            try:
-                zip_buffer = make_results_zip()
-                st.session_state["zip_buffer"] = zip_buffer.getvalue()
-                st.success("✅ 打包完成，点击右侧下载")
-            except Exception as e:
-                st.error(f"打包出错：{e}")
-
-    with col2:
-        if "zip_buffer" in st.session_state:
-            st.download_button(
-                label="⬇️ 下载全部结果（ZIP）",
-                data=st.session_state["zip_buffer"],
-                file_name="community15_results.zip",
-                mime="application/zip",
-                use_container_width=True,
-                key="fig_zip_dl",
-            )
-        else:
-            st.info("请先点左侧「打包」")
+    download_section("fig")
 
 
 elif menu == "📊 分析结果":
@@ -638,31 +610,7 @@ elif menu == "📊 分析结果":
                 st.error(f"读取失败：{e}")
             st.markdown("---")
 
-    st.markdown("---")
-    st.markdown("### 📦 下载结果")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📦 打包所有结果（ZIP）", use_container_width=True, key="ana_zip_btn"):
-            try:
-                zip_buffer = make_results_zip()
-                st.session_state["zip_buffer"] = zip_buffer.getvalue()
-                st.success("✅ 打包完成，点击右侧下载")
-            except Exception as e:
-                st.error(f"打包出错：{e}")
-
-    with col2:
-        if "zip_buffer" in st.session_state:
-            st.download_button(
-                label="⬇️ 下载全部结果（ZIP）",
-                data=st.session_state["zip_buffer"],
-                file_name="community15_results.zip",
-                mime="application/zip",
-                use_container_width=True,
-                key="ana_zip_dl",
-            )
-        else:
-            st.info("请先点左侧「打包」")
+    download_section("ana")
 
 
 elif menu == "📁 输出路径设置":

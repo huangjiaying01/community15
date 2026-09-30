@@ -11,3 +11,4 @@ pyproj
 pyogrio
 tifffile
 modelscope
+networkx

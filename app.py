@@ -49,6 +49,14 @@ def clear_outputs():
                     f.unlink()
                 except Exception:
                     pass
+        vector_dir = get_output_dir() / "vectors"
+        if vector_dir.exists():
+            for f in vector_dir.rglob("*"):
+                try:
+                    if f.is_file():
+                        f.unlink()
+                except Exception:
+                    pass
     except Exception:
         pass
     st.session_state.pop("zip_buffer", None)
@@ -289,41 +297,48 @@ if menu == "🏠 首页总览":
                 from modules.visualization import run_all_figures
                 from modules.analysis import generate_analysis_tables
                 from modules.export_geotiff import export_all_geotiff
+                from modules.export_study_area import export_study_area_vectors
 
                 clear_outputs()
 
-                status.info("步骤 1/6：数据准备与清洗...")
+                status.info("步骤 1/7：数据准备与清洗...")
                 progress.progress(10)
                 report = run_clean()
                 for line in report:
                     st.write(line)
-                progress.progress(25)
+                progress.progress(20)
 
-                status.info("步骤 2/6：生成 15 分钟生活圈...")
+                status.info("步骤 2/7：生成 15 分钟生活圈...")
                 run_isochrone()
-                progress.progress(45)
+                progress.progress(35)
 
-                status.info("步骤 3/6：2SFCA + 熵权法评价...")
+                status.info("步骤 3/7：2SFCA + 熵权法评价...")
                 run_evaluation()
-                progress.progress(60)
+                progress.progress(50)
 
-                status.info("步骤 4/6：一键出图...")
+                status.info("步骤 4/7：一键出图...")
                 run_all_figures()
+                progress.progress(65)
+
+                status.info("步骤 5/7：生成分析表格...")
+                generate_analysis_tables()
                 progress.progress(75)
 
-                status.info("步骤 5/6：生成分析表格...")
-                generate_analysis_tables()
+                status.info("步骤 6/7：导出 TIFF 和研究区边界...")
+                export_all_geotiff()
                 progress.progress(90)
 
-                status.info("步骤 6/6：导出 TIFF 和研究区边界...")
-                export_all_geotiff()
+                status.info("步骤 7/7：导出研究区路网与小区矢量...")
+                road_path, comm_path, area_name = export_study_area_vectors()
+                st.write(f"✅ 研究区【{area_name}】矢量已导出")
+                st.write(f"- 路网：`{road_path}`")
+                st.write(f"- 小区：`{comm_path}`")
                 progress.progress(100)
 
                 status.success("✅ 全流程运行完成")
 
                 st.session_state["run_success"] = True
                 st.session_state["run_message"] = "全流程运行完成"
-
                 st.balloons()
                 st.rerun()
             except Exception as e:
@@ -648,6 +663,7 @@ elif menu == "📁 输出路径设置":
     st.write(f"- 表格（Excel）：`{get_tab_dir()}`")
     st.write(f"- 栅格（TIFF）：`{get_output_dir() / 'geotiff'}`")
     st.write(f"- 研究区边界（SHP）：`{get_output_dir() / 'geotiff' / 'study_area.shp'}`")
+    st.write(f"- 研究区矢量（SHP）：`{get_output_dir() / 'vectors'}`")
 
 
 elif menu == "⚙️ 优化建议与导出":
@@ -685,11 +701,30 @@ elif menu == "⚙️ 优化建议与导出":
                     st.error(f"优化出错：{e}")
 
     st.markdown("---")
+    st.markdown("### 🗂️ 导出研究区矢量")
+    st.caption("把当前研究区的路网和小区导出为 Shapefile，可直接用 QGIS / ArcGIS 打开。")
+
+    if st.button("📤 导出研究区路网与小区矢量", use_container_width=True):
+        if not STUDY_AREA_FILE.exists():
+            st.warning("请先到「🌏 研究区选择」设置研究区")
+        else:
+            from modules.export_study_area import export_study_area_vectors
+            with st.spinner("导出中..."):
+                try:
+                    road_path, comm_path, area_name = export_study_area_vectors()
+                    st.success(f"✅ 已导出研究区【{area_name}】")
+                    st.write(f"- 路网：`{road_path}`")
+                    st.write(f"- 小区：`{comm_path}`")
+                except Exception as e:
+                    st.error(f"导出出错：{e}")
+
+    st.markdown("---")
     st.markdown("### 📁 导出文件位置")
     st.write(f"- 图片（PNG）：`{get_fig_dir()}`")
     st.write(f"- 表格（Excel）：`{get_tab_dir()}`")
     st.write(f"- 栅格（TIFF）：`{get_output_dir() / 'geotiff'}`")
     st.write(f"- 研究区边界（SHP）：`{get_output_dir() / 'geotiff' / 'study_area.shp'}`")
+    st.write(f"- 研究区矢量（SHP）：`{get_output_dir() / 'vectors'}`")
 
     tbls = sorted(get_tab_dir().glob("*.xlsx"))
     if tbls:
